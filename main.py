@@ -25,6 +25,7 @@ pygame.display.set_caption("Racing Game!")
 #-------------------------------------------------------------------------------------
 
 FPS = 60
+PATH = [(177, 112), (103, 62), (56, 148), (58, 448), (321, 741), (410, 659), (412, 519), (554, 473), (596, 670), (676, 752), (746, 646), (739, 393), (422, 349), (454, 254), (728, 258), (722, 89), (301, 108), (285, 388), (172, 369), (167, 250)]
 ################## Classes #################
 class AbstractCar:
     
@@ -88,13 +89,73 @@ class PlayerCar(AbstractCar):
         self.vel = -self.vel/2
         self.move()
 
+class ComputerCar(AbstractCar):
+    IMG = GREEN_CAR
+    START_POS = (150,200)
+
+    def __init__(self, max_vel, rotation_vel, path=[]):
+        super().__init__(max_vel, rotation_vel)
+        self.path = path
+        self.current_point = 0
+        self.vel = max_vel
+
+    def draw_points(self,win):
+        for point in self.path:
+            pygame.draw.circle(win, (255,0,0), point, 5)
+
+    def draw(self, win):
+        super().draw(win)
+        # self.draw_points(win)
+
+    def calculate_angle(self):
+        target_x, target_y = self.path[self.current_point]
+        x_diff = target_x - self.x
+        y_diff = target_y - self.y
+
+        if y_diff == 0:
+            desired_radian_angle = math.pi/2
+        else:
+            desired_radian_angle = math.atan(x_diff / y_diff)
+
+        if target_y > self.y:
+            desired_radian_angle += math.pi
+
+        difference_in_angle = self.angle - math.degrees(desired_radian_angle)
+        if difference_in_angle >= 180:
+            difference_in_angle -= 360
+
+        if difference_in_angle >0:
+            self.angle -=  min(self.rotation_vel, abs(difference_in_angle))
+        else:
+            self.angle +=  min(self.rotation_vel, abs(difference_in_angle))
+
+    def update_path_point(self):
+        target = self.path[self.current_point]
+        rect = pygame.Rect(self.x, self.y, self.img.get_width(), self.img.get_height())
+        if rect.collidepoint(*target):
+            self.current_point += 1
+
+
+    
+    def move(self):
+        if self.current_point  >= len(self.path):
+            return
+        
+        self.calculate_angle()
+        self.update_path_point()
+        super().move()
+    
+
+
 ################# FUNCTIONS ####################
 
-def draw(win, images, player_car):
+def draw(win, images, player_car, computer_car):
     for img, pos in images:
         win.blit(img, pos)
     
     player_car.draw(win)
+    computer_car.draw(win)
+
     pygame.display.update()
 
 def move_player(player_car):
@@ -123,31 +184,46 @@ clock = pygame.time.Clock()
 
 images=[(GRASS, (0,0)),(TRACK, (0,0)), (FINISH, FINISH_POS), (TRACK_BORDER, (0,0))]
 run = True
-player_car = PlayerCar(6,4)
+player_car = PlayerCar(4,4)
+computer_car = ComputerCar(4,4, PATH)
+
+def handle_collision(player_car, computer_car):
+    if player_car.collide(TRACK_BORDER_MASK) != None:
+        player_car.bounce()
+
+    computer_finish_poi_collide = computer_car.collide(FINISH_MASK, *FINISH_POS)
+    if  computer_finish_poi_collide != None:
+        player_car.reset()
+        computer_car.reset()
+
+    player_finish_poi_collide = player_car.collide(FINISH_MASK, *FINISH_POS)
+    if  player_finish_poi_collide != None:
+        if player_finish_poi_collide[1] == 0:
+            player_car.bounce()
+        else:
+            player_car.reset()
+            computer_car.reset()
 
 while run:
     clock.tick(FPS)
 
-    draw(WIN, images, player_car)
+    draw(WIN, images, player_car, computer_car)
     
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             run=False
             break
+
+        # if event.type == pygame.MOUSEBUTTONDOWN:
+        #     pos = pygame.mouse.get_pos()
+        #     computer_car.path .append(pos)
     
     move_player(player_car)
+    computer_car.move()
 
-    if player_car.collide(TRACK_BORDER_MASK) != None:
-        player_car.bounce()
-
-    finish_poi_collide = player_car.collide(FINISH_MASK, *FINISH_POS)
-    if  finish_poi_collide != None:
-        if finish_poi_collide[1] == 0:
-            player_car.bounce()
-        else:
-            player_car.reset()
-            print("finish")
+    handle_collision(player_car, computer_car)
+            
 
 
-
+print(computer_car.path)
 pygame.quit()
