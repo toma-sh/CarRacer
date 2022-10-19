@@ -1,9 +1,7 @@
-import imghdr
-import pygame
-import time
 import math
+import pygame
 
-from utils import scale_img, blit_rotate_center
+from utils import blit_rotate_center, scale_img
 
 GRASS = scale_img(pygame.image.load("imgs/grass.jpg"), 2.5)
 
@@ -22,23 +20,25 @@ WIDTH, HEIGHT = TRACK.get_width(), TRACK.get_height()
 WIN = pygame.display.set_mode((WIDTH, HEIGHT))
 
 pygame.display.set_caption("Racing Game!")
-#-------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------
 
 FPS = 60
-PATH = [(177, 112), (103, 62), (56, 148), (58, 448), (321, 741), (410, 659), (412, 519), (554, 473), (596, 670), (676, 752), (746, 646), (739, 393), (422, 349), (454, 254), (728, 258), (722, 89), (301, 108), (285, 388), (172, 369), (167, 250)]
+PATH = [(177, 112), (103, 62), (56, 148), (58, 448), (321, 741), (410, 659),
+(412, 519), (554, 473), (596, 670), (676, 752), (746, 646),
+ (739, 393), (422, 349), (454, 254), (728, 258), (722, 89), (301, 108),
+ (285, 388), (172, 369), (167, 250)]
 ################## Classes #################
 class AbstractCar:
-    
-
-    def __init__(self, max_vel, rotation_vel):
-        self.img = self.IMG
+    def __init__(self, max_vel, rotation_vel, start_pos):
+        self.START_POS = start_pos
+        self.img = pygame.Surface((10,10))
         self.max_vel = max_vel
         self.vel = 0
         self.rotation_vel = rotation_vel
         self.angle = 0
-        self.x, self.y = self.START_POS
+        self.x, self.y = start_pos
         self.acceleration = 0.1
-    
+
     def rotate(self, left=False, right=False):
         if left:
             self.angle += self.rotation_vel
@@ -78,8 +78,10 @@ class AbstractCar:
 
 
 class PlayerCar(AbstractCar):
-    IMG = RED_CAR
-    START_POS = (180,200)
+    def __init__(self, max_vel, rotation_vel, start_pos):
+        super().__init__(max_vel, rotation_vel,start_pos)
+        self.img = RED_CAR
+        
 
     def reduce_speed(self):
         self.vel= max(self.vel - self.acceleration/2, 0)
@@ -90,11 +92,10 @@ class PlayerCar(AbstractCar):
         self.move()
 
 class ComputerCar(AbstractCar):
-    IMG = GREEN_CAR
-    START_POS = (150,200)
-
-    def __init__(self, max_vel, rotation_vel, path=[]):
-        super().__init__(max_vel, rotation_vel)
+    def __init__(self, max_vel, rotation_vel,start_pos, path=[]):
+        super().__init__(max_vel, rotation_vel, start_pos)
+        self.img = GREEN_CAR
+       
         self.path = path
         self.current_point = 0
         self.vel = max_vel
@@ -102,10 +103,6 @@ class ComputerCar(AbstractCar):
     def draw_points(self,win):
         for point in self.path:
             pygame.draw.circle(win, (255,0,0), point, 5)
-
-    def draw(self, win):
-        super().draw(win)
-        # self.draw_points(win)
 
     def calculate_angle(self):
         target_x, target_y = self.path[self.current_point]
@@ -135,8 +132,6 @@ class ComputerCar(AbstractCar):
         if rect.collidepoint(*target):
             self.current_point += 1
 
-
-    
     def move(self):
         if self.current_point  >= len(self.path):
             return
@@ -145,7 +140,6 @@ class ComputerCar(AbstractCar):
         self.update_path_point()
         super().move()
     
-
 
 ################# FUNCTIONS ####################
 
@@ -158,7 +152,7 @@ def draw(win, images, player_car, computer_car):
 
     pygame.display.update()
 
-def move_player(player_car):
+def move_player(player_car: PlayerCar):
     keys = pygame.key.get_pressed()
     moved = False
 
@@ -176,6 +170,24 @@ def move_player(player_car):
     if not moved:
         player_car.reduce_speed()
 
+
+def handle_collision(player_car: PlayerCar, computer_car: ComputerCar):
+    if player_car.collide(TRACK_BORDER_MASK) is not None:
+        player_car.bounce()
+
+    computer_finish_poi_collide = computer_car.collide(FINISH_MASK, *FINISH_POS)
+    if computer_finish_poi_collide is not None:
+        player_car.reset()
+        computer_car.reset()
+
+    player_finish_poi_collide = player_car.collide(FINISH_MASK, *FINISH_POS)
+    if player_finish_poi_collide is not None:
+        if player_finish_poi_collide[1] == 0:
+            player_car.bounce()
+        else:
+            player_car.reset()
+            computer_car.reset()
+            
 #################################################
 
 ################ MAIN APP ####################
@@ -184,25 +196,10 @@ clock = pygame.time.Clock()
 
 images=[(GRASS, (0,0)),(TRACK, (0,0)), (FINISH, FINISH_POS), (TRACK_BORDER, (0,0))]
 run = True
-player_car = PlayerCar(4,4)
-computer_car = ComputerCar(4,4, PATH)
+player_car = PlayerCar(6,5,(180,200))
+computer_car = ComputerCar(4,4, (150,200),PATH)
 
-def handle_collision(player_car, computer_car):
-    if player_car.collide(TRACK_BORDER_MASK) != None:
-        player_car.bounce()
 
-    computer_finish_poi_collide = computer_car.collide(FINISH_MASK, *FINISH_POS)
-    if  computer_finish_poi_collide != None:
-        player_car.reset()
-        computer_car.reset()
-
-    player_finish_poi_collide = player_car.collide(FINISH_MASK, *FINISH_POS)
-    if  player_finish_poi_collide != None:
-        if player_finish_poi_collide[1] == 0:
-            player_car.bounce()
-        else:
-            player_car.reset()
-            computer_car.reset()
 
 while run:
     clock.tick(FPS)
@@ -222,8 +219,6 @@ while run:
     computer_car.move()
 
     handle_collision(player_car, computer_car)
-            
-
 
 print(computer_car.path)
 pygame.quit()
